@@ -43,6 +43,13 @@ def tier_mix(model_ids, shares, models_dict: Optional[Dict[str, Model]] = None):
     """Split tier weights across the models in each tier.
 
     A tier with no model on this catalog folds onto the cheapest tier that exists.
+
+    Note on Model Tiers:
+    `Model.tier` represents the global foundation lab portfolio tier (e.g. economy, mid,
+    flagship across universal foundation models). By contrast, `ROBI_BALANCED_TIER` represents
+    the operator-relative marketing and risk tier: on Robi's curated 8-model catalog, models
+    like Claude Haiku 4.5 are classified as 'frontier' because Haiku is the priciest model
+    offered ($5.00/1M output), whereas globally Anthropic prices Haiku as an economy utility.
     """
     m_dict = models_dict or MODELS
     grouped = _by_tier(model_ids, m_dict)

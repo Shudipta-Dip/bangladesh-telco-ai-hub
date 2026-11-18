@@ -1,225 +1,188 @@
-# BINDING SPEC: Bangladeshi Telco AI Hub Unit-Economics Simulator
+# Bangladesh Telco AI Plans: Tariff and Cost Reference
 
-This file is the build spec. `simulation_spec.md` stays as the formula source. Where the two differ, this file wins.
+This document compiles retail subscription plans, foundation model rate cards, and local regulatory costs for consumer AI services in Bangladesh.
 
-The simulator models retail AI subscription packs launched by Bangladesh's three major mobile network operators: **Banglalink (RYZE)**, **Robi (EveryAI)**, and **Grameenphone (OneAI)**. Each operator executes a distinct commercial packaging, model routing, VAT treatment, and media/file accounting architecture.
-
-Stack: Python 3 with NumPy and Pandas. Monthly totals per user are the grain.
-Research date for prices and Bangladesh charges: 6 October 2026.
-
----
-
-## 1. STRATEGIC ARCHITECTURE BY TELCO OPERATOR
-
-### A. Banglalink AI Hub (RYZE) — Gated Whitelists & Flat Subscriptions
-* **Strategy:** Flat recurring monthly subscription packs with **Unlimited Chat** within rate limits, paired with strict model gating and hard quotas for media (images, videos, audio/music) and un-debited file uploads.
-* **Transition Note:** Banglalink operates on **Gated Whitelists (`kind="gated"`, `tokens=None`)** across 5 commercial plans: Basic (৳100), Advanced (৳300), Pro (৳500), Creator (৳1,000), Legend (৳1,500).
-* **VAT Baseline:** `bl_vat_mode = "inclusive"` (`Recognized = Sticker / 1.15`, reflecting direct digital/app checkout absorbing 15% VAT inside the sticker fee; talktime recharge and 50/50 split evaluated in `scenario_stress_test.csv`).
-* **Media & File Treatment:**
-  * Media generation (Images, Videos, Music/Audio) does **NOT** debit tokens from a balance; fixed quotas are absorbed by the flat fee.
-  * **Video Clip Duration:** Plan cards state clip counts (`13` clips on Pro, `65` clips on Creator/Legend). Deterministic grid & worst-case corners use conservative **`5.0s/clip`** (`bl_video_sec_per_clip = 5.0`, yielding `65s` and `325s`); Monte Carlo draws continuous **`Uniform(4.0s, 8.0s)`** per user; stress suite also evaluates **`8.0s/clip`**.
-  * **Independent Audio Axis:** `audio_fraction` varies independently in both the `3D` exhaustive media grid (`11 × 11 × 11 = 1,331` cells on Creator/Legend) and Monte Carlo zero-inflated Beta draws.
-  * **Un-Debited File Context Tokens:** Banglalink's `5–80` file uploads do not debit a balance. Each uploaded file adds pure input context load (`bl_tokens_per_file = 20,000` input tokens/file deterministic; `Uniform(15,000, 25,000)` per user in Monte Carlo; `11` levels `0..100%` in exhaustive profitability), billed at the pack's weighted cache/miss input rate plus router infra overhead.
-  * **Media Bill Risk:** Under app-inclusive net revenue, maxing out included media alone reaches **`1.41×` to `4.93×`** of net subscription revenue on Pro (`1.41×`), Legend (`3.49×`), and Creator (`4.93×`).
-
-### B. Robi EveryAI — Mode-Based Tiered Intelligence & Token Pool Debit
-* **Strategy:** Mode-based intelligent routing combined with document, slide, and code file generation. Robi is the **only operator** enforcing a prepaid token pool with direct token debit for both images and files.
-* **VAT Baseline:** `robi_vat_mode = "inclusive"` (`Recognized = Sticker / 1.15`, with talktime recharge `"sticker_is_revenue"` and `50/50` split evaluated in stress tests).
-* **4 Operating Modes:**
-  1. **Saver:** Restricts access to `DeepSeek V4 Flash` and `Gemini 2.5 Flash Lite`.
-  2. **Balanced:** Smart auto-routing (`70%` budget, `20%` mid, `10%` frontier).
-  3. **Expert:** Unlocks all 8 text models (`20%` budget, `30%` mid, `50%` frontier).
-  4. **Beast:** Uncapped output quotas, routing `50/50` to `Claude Haiku 4.5` and `Grok 4.3`.
-* **Media & File Treatment:**
-  * **Images and files DEDUCT directly from the token pool.** Standalone images (`Nano Banana 2 Lite` @ \$0.035, `GPT Image 2.5 Sunburst` @ \$0.050 -> midpoint \$0.0425) debit tokens at the pack's retail token rate:
-    $$\text{TokensPerImage}_p = \frac{\text{ImageUSD} \times \text{fx\_buy}}{\text{PriceBDT}_p / \text{Tokens}_p}$$
-  * Because debit matches wholesale cost at sticker price, full media conversion caps wholesale exposure identically across all 5 Robi packs at **`1.23×` net revenue** (`-Tk 18.7` per `Tk 100` paid under inclusive VAT + 6.5% BTRC/SOF wedge).
-* **Every Robi Model (Exact 10 Models: 8 Text + 2 Image):**
-  `Claude Haiku 4.5`, `DeepSeek V4 Flash`, `Gemini 2.5 Flash Lite`, `Gemini 3.5 Flash Lite`, `Kimi K2.6`, `GPT-5 Nano`, `Grok 4.1 Fast Non-Reasoning`, `Grok 4.3`, `Nano Banana 2 Lite`, `GPT Image 2.5 Sunburst`.
-
-### C. Grameenphone OneAI — Gated Whitelists & Flat Recurring Subscriptions
-* **Strategy:** Flat-fee prepaid packs with **NO text token allowance** (unlimited chat within rate limits).
-* **VAT Baseline:** `gp_vat_mode = "added_on_top"` (`Cash = Sticker * 1.15`, `Recognized = Sticker`).
-* **Catalog & Tiered Image Rates:**
-  * Lite uses **`Grok 4.1 Fast` (`grok-4.1-fast-nr`, \$0.20/\$0.50)**; Plus unlocks **`Grok 4.3` (\$1.25/\$2.50)** alongside `GPT-5.4` and `Gemini 3.8 Flash`.
-  * Explicit published-anchored deterministic image tiers: **\$0.035/image** on Free/Student/Lite (`Nano Banana 2 Lite` tier), **\$0.045/image** on Plus, and **\$0.050/image** on Pro (`Nano Banana 2` tier). Because GP does not publish image SKU names on consumer cards, Monte Carlo samples continuous **`gp_image_usd ~ Uniform($0.035, $0.050)`** per user.
-* **Video Cap:** Hard **30-second** cap on GP Pro (`Veo 3.1 Fast 720p` @ \$0.100/sec).
+Three operators offer consumer AI plans:
+- **Banglalink (RYZE):** Monthly subscriptions with model whitelists, media quotas, and un-debited file uploads.
+- **Robi (EveryAI):** Prepaid monthly token pools with routing modes and token deductions for images and files.
+- **Grameenphone (OneAI):** Monthly subscriptions with model whitelists and image allowances, charging VAT on top of checkout.
 
 ---
 
-## 2. DUAL-ANALYSIS & PERMANENT VERIFICATION ARCHITECTURE
+## 1. Operator Commercial Packaging
 
-1. **Exhaustive Factor Grid (Deterministic Perimeter):**
-   * **Robi:** Full simplex lattice × 6 I:O ratios × 11 cache hits × 111 utilization/image cells (`142,476,048` scenarios/pack).
-   * **Banglalink & GP:** Full whitelist simplex × 6 I:O ratios × 11 cache hits × full 3D media grid (`images × video × audio`, up to `1,331` cells) × `11` file levels (Banglalink) × **`11` chat volumes (`0.5M–5.5M` tokens)**.
-2. **Empirical Monte Carlo Cohort Simulation:** `10,000` cohorts of `100` heterogeneous users (`1,000,000` users) sampled from continuous empirical priors (`Beta`, `Log-Mixture`, `Dirichlet` across all `27` active models, continuous GP image rates, `4–8s` BL clip lengths, independent audio & file fractions). Also evaluates **27-model active gating cost avoidance** across all `1,000,000` simulated users (`monte_carlo_summary.csv` & Chart 6 `blocking_models.png`), while retaining `scan_gating()` (`15`-model `OPEN_MODELS`) as the deterministic uniform reference (`gating_breakdown.csv`).
-3. **Common Random Numbers (CRN) Stress Testing:** Reuses identical sampled cohorts across all `12` stress scenarios in `scenario_stress_test.csv` (`Baseline`, `Banglalink 8s/clip Video`, `BL/Robi Talktime Recharge`, `50/50 Channel VAT Split`, `Gemini 2027 Cliff`, `DeepSeek Peak`, `Claude 1h TTL`, `Long Context`, `10%/20% Volume Discounts`, `Router Infra $0.10/1M`, `Worst-Case Combined`).
+### A. Banglalink AI Hub (RYZE)
+* **Structure:** Recurring monthly subscriptions with unlimited chat on whitelisted models, fixed quotas for media (images, video clips, audio tracks), and un-debited file uploads.
+* **Plans:** Basic (৳100), Advanced (৳300), Pro (৳500), Creator (৳1,000), Legend (৳1,500).
+* **VAT:** In-app digital checkouts absorb 15% VAT inside the sticker fee (`Recognized = Sticker / 1.15`).
+* **Video Clip Duration:** 5.0 seconds per clip baseline (65s on Pro, 325s on Creator and Legend). Monte Carlo samples 4.0 to 8.0 seconds per clip.
+* **File Uploads:** 5 to 80 uploaded files. Each file adds 20,000 input context tokens billed at weighted cache input rates plus server infrastructure costs.
+* **Wholesale Exposure:** Because media quotas do not deduct from a token balance, heavy media usage on Creator (৳1,000) reaches 4.93x net subscription revenue.
+
+### B. Robi EveryAI
+* **Structure:** Prepaid monthly token budgets where text chat, images, and files draw from one token pool.
+* **Plans:** Pack 1 (৳99, 1M tokens), Pack 2 (৳149, 2M tokens), Pack 3 (৳349, 5M tokens), Pack 4 (৳599, 10M tokens), Pack 5 (৳999, 20M tokens).
+* **VAT:** In-app checkouts absorb 15% VAT inside the sticker fee (`Recognized = Sticker / 1.15`).
+* **Routing Modes:**
+  1. Saver: Routes to DeepSeek V4 Flash and Gemini 2.5 Flash Lite. Available on all packs.
+  2. Balanced: Routes across budget (70%), mid (20%), and frontier (10%) models. Available on all packs.
+  3. Expert: Unlocks all 8 text models (20% budget, 30% mid, 50% frontier). Available on Pack 3, 4, and 5.
+  4. Beast: Routes 50/50 between Claude Haiku 4.5 and Grok 4.3. Available on Pack 4 and 5.
+* **Media Deductions:** Images and files deduct tokens from the pool using the pack implied retail rate:
+  $$\text{TokensPerImage}_p = \frac{\text{ImageUSD} \times \text{fx\_buy}}{\text{PriceBDT}_p / \text{Tokens}_p}$$
+* **Loss Ceiling:** Because deductions match wholesale cost at sticker price, wholesale media cost cannot exceed collected revenue. Maximum loss stops at -18.7% of sticker price (-৳18.70 per ৳100) under inclusive VAT and 6.5% regulatory fees.
+
+### C. Grameenphone OneAI
+* **Structure:** Monthly subscriptions with unlimited text on whitelisted models and fixed image quotas.
+* **VAT:** Grameenphone adds 15% VAT on top of checkout prices (`Cash = Sticker * 1.15`, `Recognized = Sticker`).
+* **Plans:** Free (৳0), Student (৳71), Lite (৳99), Plus (৳299), Pro (৳799).
+* **Key Allocations:**
+  * Free: GPT-5 Nano and Gemini 3 Flash. 0 images.
+  * Student (৳71): GPT-5 Nano and Gemini 3 Flash. 10 images ($0.035 each).
+  * Lite (৳99): Adds Grok 4.1 Fast Non-Reasoning and DeepSeek V4 Flash. 30 images ($0.035 each).
+  * Plus (৳299): Adds Grok 4.3, GPT-5.4, Gemini 3.8 Flash, Kimi K2.6. 50 images ($0.045 each).
+  * Pro (৳799): Claude Sonnet 4 and 5, Claude Opus 5, GPT-5.6 Sol, Grok 4.6, DeepSeek V4 Pro. 100 images ($0.050 each) and a 30-second video cap ($0.10/sec).
 
 ---
 
-## 3. PACK CATALOG & RATE STRUCTURE
+## 2. Plan Catalogs and Quotas
 
-### A. Banglalink RYZE AI Hub Pricing Plans
+### Banglalink RYZE Plans
+| Plan | Price (BDT) | Validity | Allowed Models | Chat | Files | Images | Video Clips (5s) | Audio Tracks |
+|---|---:|---|---|---|---|---|---|---|
+| Basic | ৳100 | 30 Days | 3 Models | Unlimited | 5 | 5 | 0 | 0 |
+| Advanced | ৳300 | 30 Days | 4 Models | Unlimited | 15 | 15 | 0 | 0 |
+| Pro | ৳500 | 30 Days | 5 Models | Unlimited | 25 | 54 | 13 (65s) | 0 |
+| Creator | ৳1,000 | 30 Days | 11 Models | Unlimited | 30 | 272 | 65 (325s) | 389 |
+| Legend | ৳1,500 | 30 Days | 8 Models | Unlimited | 80 | 272 | 65 (325s) | 389 |
 
-| Plan | Price (BDT) | Validity | AI Models | Chat Allowance | Files | Images | Videos | Audio | Work Mode |
-|---|---:|---|---|---|---|---|---|---|---|
-| Basic | ৳100 | 30 Days | 4 Models | Unlimited | Up to 5 | Up to 5 | N/A | N/A | N/A |
-| Advanced | ৳300 | 30 Days | 5 Models | Unlimited | Up to 15 | Up to 15 | N/A | N/A | N/A |
-| Pro | ৳500 | 30 Days | 10 Models | Unlimited | Up to 25 | Up to 54 | Up to 13 (65s @ 5s) | N/A | N/A |
-| Creator | ৳1,000 | 30 Days | 24 Models | Unlimited | Up to 30 | Up to 272 | Up to 65 (325s @ 5s) | Up to 389 | Included |
-| Legend | ৳1,500 | 30 Days | 24 Models | Unlimited | Up to 80 | Up to 272 | Up to 65 (325s @ 5s) | Up to 389 | Included |
-
-#### Banglalink Model Availability Matrix
-
-| Model | Category / Type | Basic | Advanced | Pro | Creator | Legend |
+#### Banglalink Model Distribution
+| Model | Category | Basic | Advanced | Pro | Creator | Legend |
 |---|---|:---:|:---:|:---:|:---:|:---:|
-| GPT 6 | LLM / Chat | ✅ | ✅ | ✅ | ✅ | ❌ |
-| GPT 6.1 Terra | LLM / Chat | ❌ | ❌ | ❌ | ❌ | ✅ |
-| Gemini 3.1 | LLM / Chat | ✅ | ✅ | ❌ | ✅ | ❌ |
-| Gemini 3.8 | LLM / Chat | ❌ | ❌ | ✅ | ❌ | ❌ |
-| Gemini 3.8 Flash | LLM / Chat | ❌ | ❌ | ❌ | ✅ | ✅ |
-| Claude Haiku 5.5 | LLM / Chat | ❌ | ❌ | ✅ | ✅ | ❌ |
-| Claude Sonnet 5 | LLM / Chat | ❌ | ❌ | ❌ | ✅ | ✅ |
-| Grok 4.3 | LLM / Chat | ❌ | ✅ | ✅ | ✅ | ❌ |
-| Grok 4.6 | LLM / Chat | ❌ | ❌ | ❌ | ✅ | ✅ |
-| Grok Imagine | Image Model | ❌ | ❌ | ❌ | ❌ | ✅ |
-| DeepSeek V4.1 | LLM / Chat | ✅ | ✅ | ✅ | ✅ | ❌ |
-| DeepSeek V4 Pro | LLM / Chat | ❌ | ❌ | ❌ | ❌ | ✅ |
-| Qwen 3.8 Max | LLM / Chat | ❌ | ❌ | ❌ | ✅ | ✅ |
-| Perplexity Sonar Pro | LLM / Chat | ❌ | ❌ | ❌ | ✅ | ✅ |
-| Mistral Large 2512 | LLM / Chat | ❌ | ❌ | ❌ | ✅ | ✅ |
-| FLUX Schnell | Image Model | ✅ | ✅ | ✅ | ✅ | ✅ |
-| FLUX 2 Pro | Image Model | ❌ | ❌ | ✅ | ✅ | ✅ |
-| GPT Image 2 | Image Model | ❌ | ❌ | ❌ | ✅ | ✅ |
-| Nano Banana 2 Lite | Image Model | ❌ | ❌ | ✅ | ❌ | ❌ |
-| Nano Banana 2 | Image Model | ❌ | ❌ | ❌ | ✅ | ✅ |
-| Seedream 5 Pro | Image Model | ❌ | ❌ | ❌ | ✅ | ✅ |
-| Seedance 1 Pro Fast | Video Model | ❌ | ❌ | ✅ | ✅ | ✅ |
-| Hailuo 02 Fast | Video Model | ❌ | ❌ | ❌ | ✅ | ✅ |
-| Wan 2.2 5B Fast | Video Model | ❌ | ❌ | ✅ | ✅ | ✅ |
-| Lightricks LTX 2.5 | Video Model | ❌ | ❌ | ❌ | ❌ | ✅ |
-| P-Video Draft | Video Model | ❌ | ❌ | ❌ | ✅ | ✅ |
-| MiniMax Music 1.5 | Audio / Music | ❌ | ❌ | ❌ | ✅ | ✅ |
-| Flux Music | Audio / Music | ❌ | ❌ | ❌ | ✅ | ✅ |
-| Meta MusicGen | Audio / Music | ❌ | ❌ | ❌ | ✅ | ✅ |
-| ElevenLabs Voice | Audio / Voice | ❌ | ❌ | ❌ | ✅ | ✅ |
-| ElevenLabs Music | Audio / Music | ❌ | ❌ | ❌ | ❌ | ✅ |
+| GPT 6 | Chat | Yes | Yes | Yes | Yes | No |
+| GPT 6.1 Terra | Chat | No | No | No | No | Yes |
+| Gemini 3.1 | Chat | Yes | Yes | No | Yes | No |
+| Gemini 3.8 | Chat | No | No | Yes | No | No |
+| Gemini 3.8 Flash | Chat | No | No | No | Yes | Yes |
+| Claude Haiku 5.5 | Chat | No | No | Yes | Yes | No |
+| Claude Sonnet 5 | Chat | No | No | No | Yes | Yes |
+| Grok 4.3 | Chat | No | Yes | Yes | Yes | No |
+| Grok 4.6 | Chat | No | No | No | Yes | Yes |
+| Grok Imagine | Image | No | No | No | No | Yes |
+| DeepSeek V4.1 | Chat | Yes | Yes | Yes | Yes | No |
+| DeepSeek V4 Pro | Chat | No | No | No | No | Yes |
+| Qwen 3.8 Max | Chat | No | No | No | Yes | Yes |
+| Perplexity Sonar Pro | Chat | No | No | No | Yes | Yes |
+| Mistral Large 2512 | Chat | No | No | No | Yes | Yes |
+| FLUX Schnell | Image | Yes | Yes | Yes | Yes | Yes |
+| FLUX 2 Pro | Image | No | No | Yes | Yes | Yes |
+| GPT Image 2 | Image | No | No | No | Yes | Yes |
+| Nano Banana 2 Lite | Image | No | No | Yes | No | No |
+| Nano Banana 2 | Image | No | No | No | Yes | Yes |
+| Seedream 5 Pro | Image | No | No | No | Yes | Yes |
+| Seedance 1 Pro Fast | Video | No | No | Yes | Yes | Yes |
+| Hailuo 02 Fast | Video | No | No | No | Yes | Yes |
+| Wan 2.2 5B Fast | Video | No | No | Yes | Yes | Yes |
+| Lightricks LTX 2.5 | Video | No | No | No | No | Yes |
+| P-Video Draft | Video | No | No | No | Yes | Yes |
+| MiniMax Music 1.5 | Audio | No | No | No | Yes | Yes |
+| Flux Music | Audio | No | No | No | Yes | Yes |
+| Meta MusicGen | Audio | No | No | No | Yes | Yes |
+| ElevenLabs Voice | Voice | No | No | No | Yes | Yes |
+| ElevenLabs Music | Audio | No | No | No | No | Yes |
 
-### B. Robi EveryAI (Monthly Token Pool with Image/File Debit)
-| Plan | Price (BDT) | Token Pool | Implied Retail Rate (BDT/1M) | Validity | Allowed Modes |
+### Robi EveryAI Plans
+| Plan | Price (BDT) | Token Pool | Implied Rate (BDT/1M) | Validity | Allowed Modes |
 |---|---:|---:|---:|---|---|
-| Pack 1 | 99 | 1,000,000 | Tk 99.0 | 30 days | Saver, Balanced |
-| Pack 2 | 149 | 2,000,000 | Tk 74.5 | 30 days | Saver, Balanced |
-| Pack 3 | 349 | 5,000,000 | Tk 69.8 | 30 days | Saver, Balanced, Expert |
-| Pack 4 | 599 | 10,000,000 | Tk 59.9 | 30 days | Saver, Balanced, Expert, Beast |
-| Pack 5 | 999 | 20,000,000 | Tk 50.0 | 30 days | Saver, Balanced, Expert, Beast |
+| Pack 1 | ৳99 | 1,000,000 | ৳99.00 | 30 days | Saver, Balanced |
+| Pack 2 | ৳149 | 2,000,000 | ৳74.50 | 30 days | Saver, Balanced |
+| Pack 3 | ৳349 | 5,000,000 | ৳69.80 | 30 days | Saver, Balanced, Expert |
+| Pack 4 | ৳599 | 10,000,000 | ৳59.90 | 30 days | Saver, Balanced, Expert, Beast |
+| Pack 5 | ৳999 | 20,000,000 | ৳49.95 | 30 days | Saver, Balanced, Expert, Beast |
 
-### C. Grameenphone OneAI (Gated Whitelists)
-| Plan | Price (BDT) | Allowed Text Models | Image Quota & Benchmark Rate | Video Quota |
+### Grameenphone OneAI Plans
+| Plan | Price (BDT) | Allowed Chat Models | Image Quota and Benchmark | Video Quota |
 |---|---:|---|---|---|
-| Free | 0 | GPT-5 Nano, Gemini 3 Flash | 0 (\$0.035) | None |
-| Student | 71 | GPT-5 Nano, Gemini 3 Flash | 10 (\$0.035) | None |
-| Lite | 99 | DeepSeek V4 Flash, Gemini 3 Flash, **Grok 4.1 Fast**, GPT-5 Nano | 30 (\$0.035) | None |
-| Plus | 299 | DeepSeek V4 Flash, Gemini 3 Flash, **Grok 4.3**, GPT-5 Nano, Gemini 3.8 Flash, GPT-5 Mini, GPT-5.4, Kimi K2.6 | 50 (\$0.045) | None |
-| Pro | 799 | Claude Sonnet 4, Claude Sonnet 5, Claude Opus 5, GPT-5.6 Sol, Grok 4.6, DeepSeek V4 Pro | 100 (\$0.050) | 30 seconds hard cap |
+| Free | ৳0 | GPT-5 Nano, Gemini 3 Flash | 0 images ($0.035) | None |
+| Student | ৳71 | GPT-5 Nano, Gemini 3 Flash | 10 images ($0.035) | None |
+| Lite | ৳99 | DeepSeek V4 Flash, Gemini 3 Flash, Grok 4.1 Fast, GPT-5 Nano | 30 images ($0.035) | None |
+| Plus | ৳299 | DeepSeek V4 Flash, Gemini 3 Flash, Grok 4.3, GPT-5 Nano, Gemini 3.8 Flash, GPT-5 Mini, GPT-5.4, Kimi K2.6 | 50 images ($0.045) | None |
+| Pro | ৳799 | Claude Sonnet 4, Claude Sonnet 5, Claude Opus 5, GPT-5.6 Sol, Grok 4.6, DeepSeek V4 Pro | 100 images ($0.050) | 30 seconds ($0.10/sec) |
 
 ---
 
-## 4. MASTER UPSTREAM PRICE BOOK (USD per 1M tokens unless noted)
+## 3. Upstream Model Price Book
 
-Research date: 6 October 2026. Published short-context list rates.
+List rates in USD per 1M tokens (October 2026):
 
-| Model ID | Public Name | Platform Presence | Role / Tier | Miss | Cache Read | Cache Write | Output |
+| Model ID | Public Name | Platform | Tier | Miss | Cache Read | Cache Write | Output |
 |---|---|---|---|---:|---:|---:|---:|
-| `gpt-5-nano` | GPT-5 Nano | Robi, GP | Economy | 0.05 | 0.005 | — | 0.40 |
-| `gpt-6` | GPT 6 | Banglalink | Economy | 0.15 | 0.015 | — | 0.60 |
-| `gpt-5-mini` | GPT-5 Mini | GP | Mid | 0.25 | 0.025 | — | 2.00 |
-| `gpt-5.4` | GPT-5.4 | GP | Flagship | 2.50 | 0.250 | — | 15.00 |
+| `gpt-5-nano` | GPT-5 Nano | Robi, GP | Economy | 0.05 | 0.005 | None | 0.40 |
+| `gpt-6` | GPT 6 | Banglalink | Economy | 0.15 | 0.015 | None | 0.60 |
+| `gpt-5-mini` | GPT-5 Mini | GP | Mid | 0.25 | 0.025 | None | 2.00 |
+| `gpt-5.4` | GPT-5.4 | GP | Flagship | 2.50 | 0.250 | None | 15.00 |
 | `gpt-5.6-sol` | GPT-5.6 Sol | GP | Flagship | 4.00 | 0.400 | 5.00 | 20.00 |
-| `gpt-6.1-terra` | GPT 6.1 Terra | Banglalink | Flagship | 2.00 | 0.200 | — | 12.00 |
+| `gpt-6.1-terra` | GPT 6.1 Terra | Banglalink | Flagship | 2.00 | 0.200 | None | 12.00 |
 | `claude-haiku-4.5` | Claude Haiku 4.5 | Robi | Frontier / Economy | 1.00 | 0.100 | 1.25 | 5.00 |
 | `claude-haiku-5.5` | Claude Haiku 5.5 | Banglalink | Economy / Mid | 1.00 | 0.100 | 1.25 | 5.00 |
 | `claude-sonnet-4` | Claude Sonnet 4 | GP | Flagship | 3.00 | 0.300 | 3.75 | 15.00 |
 | `claude-sonnet-5` | Claude Sonnet 5 | Banglalink, GP | Mid | 2.00 | 0.200 | 2.50 | 10.00 |
 | `claude-opus-5` | Claude Opus 5 | GP | Flagship | 5.00 | 0.500 | 6.25 | 25.00 |
-| `gemini-2.5-flash-lite` | Gemini 2.5 Flash Lite | Robi | Economy | 0.10 | 0.010 | — | 0.40 |
-| `gemini-3.1` | Gemini 3.1 | Banglalink | Economy | 0.10 | 0.010 | — | 0.40 |
-| `gemini-3.5-flash-lite` | Gemini 3.5 Flash Lite | Robi | Mid | 0.30 | 0.030 | — | 2.50 |
-| `gemini-3-flash` | Gemini 3 Flash | GP | Mid | 0.50 | 0.050 | — | 3.00 |
-| `gemini-3.8` | Gemini 3.8 | Banglalink | Mid | 0.75 | 0.075 | — | 3.75 |
-| `gemini-3.8-flash` | Gemini 3.8 Flash | Banglalink, GP | Mid | 0.75 | 0.075 | — | 3.75 |
-| `grok-4.1-fast-nr` | Grok 4.1 Fast NR | Robi, **GP** (Lite) | Economy | 0.20 | 0.050 | — | 0.50 |
-| `grok-4.3` | Grok 4.3 | Banglalink, Robi, **GP** (Plus) | Mid / Frontier | 1.25 | 0.200 | — | 2.50 |
-| `grok-4.6` | Grok 4.6 | Banglalink, GP | Mid / Frontier | 2.00 | 0.500 | — | 6.00 |
-| `deepseek-v4-flash` | DeepSeek V4 Flash | Robi, GP | Economy | 0.15 | 0.003 | — | 0.60 |
-| `deepseek-v4.1` | DeepSeek V4.1 | Banglalink | Economy | 0.15 | 0.003 | — | 0.60 |
-| `deepseek-v4-pro` | DeepSeek V4 Pro | Banglalink, GP | Mid | 0.66 | 0.022 | — | 1.98 |
-| `kimi-k2.6` | Kimi K2.6 | Robi, GP | Mid | 0.95 | 0.160 | — | 4.00 |
-| `qwen3.8-max` | Qwen 3.8 Max | Banglalink | Mid | 2.00 | 2.000 | — | 6.00 |
-| `perplexity-sonar-pro` | Perplexity Sonar Pro | Banglalink | Flagship | 3.00 | 0.500 | — | 15.00 |
-| `mistral-large-2512` | Mistral Large 2512 | Banglalink | Mid | 2.00 | 0.500 | — | 6.00 |
+| `gemini-2.5-flash-lite` | Gemini 2.5 Flash Lite | Robi | Economy | 0.10 | 0.010 | None | 0.40 |
+| `gemini-3.1` | Gemini 3.1 | Banglalink | Economy | 0.10 | 0.010 | None | 0.40 |
+| `gemini-3.5-flash-lite` | Gemini 3.5 Flash Lite | Robi | Mid | 0.30 | 0.030 | None | 2.50 |
+| `gemini-3-flash` | Gemini 3 Flash | GP | Mid | 0.50 | 0.050 | None | 3.00 |
+| `gemini-3.8` | Gemini 3.8 | Banglalink | Mid | 0.75 | 0.075 | None | 3.75 |
+| `gemini-3.8-flash` | Gemini 3.8 Flash | Banglalink, GP | Mid | 0.75 | 0.075 | None | 3.75 |
+| `grok-4.1-fast-nr` | Grok 4.1 Fast NR | Robi, GP | Economy | 0.20 | 0.050 | None | 0.50 |
+| `grok-4.3` | Grok 4.3 | Banglalink, Robi, GP | Mid / Frontier | 1.25 | 0.200 | None | 2.50 |
+| `grok-4.6` | Grok 4.6 | Banglalink, GP | Mid / Frontier | 2.00 | 0.500 | None | 6.00 |
+| `deepseek-v4-flash` | DeepSeek V4 Flash | Robi, GP | Economy | 0.15 | 0.003 | None | 0.60 |
+| `deepseek-v4.1` | DeepSeek V4.1 | Banglalink | Economy | 0.15 | 0.003 | None | 0.60 |
+| `deepseek-v4-pro` | DeepSeek V4 Pro | Banglalink, GP | Mid | 0.66 | 0.022 | None | 1.98 |
+| `kimi-k2.6` | Kimi K2.6 | Robi, GP | Mid | 0.95 | 0.160 | None | 4.00 |
+| `qwen3.8-max` | Qwen 3.8 Max | Banglalink | Mid | 2.00 | 2.000 | None | 6.00 |
+| `perplexity-sonar-pro` | Perplexity Sonar Pro | Banglalink | Flagship | 3.00 | 0.500 | None | 15.00 |
+| `mistral-large-2512` | Mistral Large 2512 | Banglalink | Mid | 2.00 | 0.500 | None | 6.00 |
 
-#### Multimodal Media Upstream Pricing
-* **Image Generation:**
-  * `FLUX Schnell`: \$0.003 / image
-  * `FLUX 2 Pro`: \$0.040 / image
-  * `GPT Image 2`: \$0.040 / image
-  * `Nano Banana 2 Lite`: \$0.035 / image (Robi & GP Student/Lite anchor)
-  * `Nano Banana 2`: \$0.050 / image (GP Pro anchor)
-  * `Seedream 5 Pro`: \$0.035 / image
-  * `Grok Imagine`: \$0.040 / image
-* **Video Generation:**
-  * `Seedance 1 Pro Fast`: \$0.060 / sec
-  * `Wan 2.2 5B Fast`: \$0.040 / sec
-  * `Hailuo 02 Fast`: \$0.080 / sec
-  * `Lightricks LTX 2.5`: \$0.080 / sec
-  * `P-Video Draft`: \$0.050 / sec
-  * `Veo 3.1 Fast 720p` (GP): \$0.100 / sec
-* **Audio & Voice Generation:**
-  * `MiniMax Music 1.5`, `Flux Music`, `Meta MusicGen`, `ElevenLabs Voice`: \$0.012 / generation
-  * `ElevenLabs Music`: \$0.015 / generation
+### Media Generation Costs
+- **Images:** FLUX Schnell ($0.003), FLUX 2 Pro ($0.040), GPT Image 2 ($0.040), Nano Banana 2 Lite ($0.035), Nano Banana 2 ($0.050), Seedream 5 Pro ($0.035), Grok Imagine ($0.040).
+- **Video:** Seedance 1 Pro Fast ($0.060/s), Wan 2.2 5B Fast ($0.040/s), Hailuo 02 Fast ($0.080/s), Lightricks LTX 2.5 ($0.080/s), P-Video Draft ($0.050/s), Veo 3.1 Fast ($0.100/s).
+- **Audio and Voice:** MiniMax Music 1.5 ($0.012), Flux Music ($0.012), Meta MusicGen ($0.012), ElevenLabs Voice ($0.012), ElevenLabs Music ($0.015).
 
 ---
 
-## 5. BANGLADESH OPERATIONAL COST STACK
+## 4. Local Cost Stack and Regulations
 
-* **FX Rates:** Interbank ask $\text{fx\_buy} = 123.30$ BDT/USD; Weighted average $\text{fx\_war} = 123.20$ BDT/USD.
-* **BTRC Gross Revenue Share:** 5.5% of recognized revenue across all operators.
-* **Social Obligation Fund (SOF):** 1.0% of recognized revenue across all operators.
-* **Collection Channel MDR:** Default 0.0% (Bangla QR MDR removed Oct 2026). Scenario sweeps 1.0% and 1.85%.
-* **Per-Operator VAT Mode:**
-  * GP OneAI (`gp_vat_mode`): `added_on_top` (`Cash = Sticker * 1.15`; `Recognized = Sticker`).
-  * Banglalink (`bl_vat_mode`): `inclusive` baseline (`Recognized = Sticker / 1.15`); stress tests cover `sticker_is_revenue` & `mixed_50_50`.
-  * Robi (`robi_vat_mode`): `inclusive` baseline (`Recognized = Sticker / 1.15`); stress tests cover `sticker_is_revenue` & `mixed_50_50`.
-* **Router & Vector Infra:** \$0.02 per 1M routed tokens (MC uniform `0.02..0.06`, stress \$0.08–\$0.10).
-* **Bank Remittance TT Commission:** Default 0.0% (MC uniform `0.0%..1.5%`, sweep up to `2.5%`).
+- **Exchange Rates:** 123.30 BDT per USD base rate.
+- **BTRC Revenue Share:** 5.5% of recognized revenue.
+- **Social Obligation Fund (SOF):** 1.0% of recognized revenue.
+- **Combined Government Take:** 6.5% of recognized revenue.
+- **VAT Modes:**
+  - Added on top (Grameenphone): Customer pays 15% VAT on top of sticker. Recognized revenue equals sticker price.
+  - Inclusive (Banglalink and Robi): Digital checkout absorbs 15% VAT inside sticker price. Recognized revenue equals sticker divided by 1.15.
+- **Server and Routing Overhead:** $0.02 per 1M routed tokens base cost ($0.02 to $0.06 in simulations).
+- **Bank Transfer Commission:** 0.0% base cost (0.0% to 1.5% in simulations).
 
 ---
 
-## 6. UNIT MARGIN AND COGS FORMULAS
+## 5. Margin and Accounting Formulas
 
-### A. Net Recognized Revenue
-$$\text{NetRevBDT} = \text{RecognizedBDT} \times (1 - 0.055 - 0.01) \times (1 - \text{mdr}) \times (1 - \text{churn})$$
+### Net Recognized Revenue
+$$\text{Net Revenue} = \text{Recognized Revenue} \times (1 - 0.055 - 0.01) \times (1 - \text{MDR}) \times (1 - \text{Churn})$$
 
-### B. Token Pool Operator Accounting (Robi)
-1. **Token Pool Debit for Media:**
+### Robi Token Pool Accounting
+1. Token Pool Debit for Images:
    $$\text{TokensPerImage}_p = \frac{\text{ImageUSD} \times \text{fx\_buy}}{\text{PriceBDT}_p / \text{Tokens}_p}$$
-2. **Usage Allocation:**
+2. Usage Allocation:
    $$\text{ImageTokens} = f_{\text{img}} \times \text{Budget}, \quad \text{TextTokens} = \text{Budget} - \text{ImageTokens}$$
-3. **Total COGS & Margin:**
-   $$\text{TextCOGS\_BDT} = \left(\text{TextTokens} \times \text{Rate}_{\text{token}} \times (1 - d) + \frac{\text{InfraUSD}}{10^6} \times \text{TextTokens}\right) \times \text{fx\_buy} \times (1 + r_{\text{tt}})$$
-   $$\text{MediaCOGS\_BDT} = \text{Images} \times \text{ImageUSD} \times (1 - d) \times \text{fx\_buy} \times (1 + r_{\text{tt}})$$
-   $$\text{ContributionBDT} = \text{NetRevBDT} - (\text{TextCOGS\_BDT} + \text{MediaCOGS\_BDT})$$
+3. Contribution:
+   $$\text{Contribution} = \text{Net Revenue} - (\text{Text Cost} + \text{Image Cost})$$
 
-### C. Gated Flat Subscription Accounting (Banglalink & GP)
-1. **Media Wholesale Bill (with variable BL clip duration):**
-   $$\text{MediaUSD} = (\text{Images} \times \text{UnitImgUSD}) + (\text{VideoSec} \times \text{UnitVidUSD}) + (\text{Audio} \times \text{UnitAudUSD})$$
-   $$\text{MediaBDT} = \text{MediaUSD} \times (1 - d) \times \text{fx\_buy} \times (1 + r_{\text{tt}})$$
-2. **Un-Debited File Context Load (Banglalink only):**
-   $$\text{FileTokens} = f_{\text{file}} \times \text{Files}_p \times \text{TokensPerFile}$$
-   $$\text{FileBDT} = \left(\text{FileTokens} \times \text{InRate}_{\text{token}} \times (1 - d) + \frac{\text{InfraUSD}}{10^6} \times \text{FileTokens}\right) \times \text{fx\_buy} \times (1 + r_{\text{tt}})$$
-3. **Room Remaining & Break-Even:**
-   $$\text{RoomBDT} = \text{NetRevBDT} - \text{MediaBDT} - \text{FileBDT}$$
-   $$\text{BreakEvenTokens} = \begin{cases} 0.0 & \text{if } \text{RoomBDT} \le 0 \\ \frac{\text{RoomBDT}}{\text{BDTPerToken}} & \text{if } \text{RoomBDT} > 0 \end{cases}$$
-4. **Total COGS & Contribution:**
-   $$\text{TotalCOGS\_BDT} = \text{ChatCOGS\_BDT} + \text{MediaBDT} + \text{FileBDT}, \quad \text{ContributionBDT} = \text{NetRevBDT} - \text{TotalCOGS\_BDT}$$
+### Flat Subscription Accounting (Banglalink and GP)
+1. Wholesale Media Bill:
+   $$\text{Media Bill USD} = (\text{Images} \times P_{\text{img}}) + (\text{Video Sec} \times P_{\text{vid}}) + (\text{Audio} \times P_{\text{aud}})$$
+2. Un-debited File Context Load (Banglalink):
+   $$\text{File Tokens} = f_{\text{file}} \times \text{Files}_p \times \text{TokensPerFile}$$
+3. Total Contribution:
+   $$\text{Contribution} = \text{Net Revenue} - (\text{Chat Cost} + \text{Media Cost} + \text{File Cost})$$

@@ -228,6 +228,36 @@ class TestEnginesAndInvariants(unittest.TestCase):
         expected_c_cogs = np.array(manual_cogs_robi).reshape(3, 5).sum(axis=1)
         self.assertTrue(np.allclose(c_robi["cogs_bdt"].to_numpy(), expected_c_cogs, rtol=1e-9))
 
+        # 1b. Verify Robi Tk 99 commercial mode confinement (expert & beast folded to balanced)
+        robi_99 = next(p for p in robi_packs() if p.pack_id == "p99")
+        c_robi99, _ = evaluate_cohorts(robi_99, behaviors, all_models, scenario=sc, n_cohorts=3, cohort_size=5)
+        tpi_99 = (sc.robi_image_usd * mean_fx) / (99.0 / 1_000_000.0)
+        manual_cogs_99 = []
+        for u in range(15):
+            raw_m = str(behaviors["robi_mode"][u])
+            confined_m = "balanced" if raw_m in ("expert", "beast") else raw_m
+            wmap = mode_weights[confined_m]
+            io = float(behaviors["io_ratio"][u])
+            hit = float(behaviors["cache_hit"][u])
+            wr = float(behaviors["cache_write"][u])
+            miss_s = max(0.0, 1.0 - hit - wr)
+            in_s, out_s = io / (io + 1.0), 1.0 / (io + 1.0)
+            usd_tok = sum(
+                w * (in_s * (miss_s * md[mid].miss + hit * md[mid].read_price + wr * md[mid].write_price) + out_s * md[mid].output)
+                for mid, w in wmap.items()
+            ) / 1_000_000.0
+            budget = 1_000_000.0 * float(behaviors["utilization"][u])
+            imgs = float(behaviors["image_fraction"][u]) * (budget / tpi_99)
+            txt = max(0.0, budget - imgs * tpi_99)
+            fx = float(behaviors["fx_buy"][u])
+            tt = float(behaviors["tt_commission"][u])
+            inf = float(behaviors["infra_per_1m"][u]) + (sc.infra_usd_per_1m - 0.02)
+            text_bdt = (txt * usd_tok * 0.90 + txt * (inf / 1e6)) * fx * (1.0 + tt)
+            img_bdt = imgs * sc.robi_image_usd * 0.90 * fx * (1.0 + tt)
+            manual_cogs_99.append(text_bdt + img_bdt)
+        expected_c_cogs_99 = np.array(manual_cogs_99).reshape(3, 5).sum(axis=1)
+        self.assertTrue(np.allclose(c_robi99["cogs_bdt"].to_numpy(), expected_c_cogs_99, rtol=1e-9))
+
         # 2. Verify Banglalink Creator (independent audio, 4-8s clip draw, file context tokens, 27-model gating)
         #    and GP Pro (continuous gp_image_usd draw, 27-model gating)
         for pack in (bl_creator, gp_pro):
@@ -263,7 +293,11 @@ class TestEnginesAndInvariants(unittest.TestCase):
                 fx = float(behaviors["fx_buy"][u])
                 tt = float(behaviors["tt_commission"][u])
                 inf = float(behaviors["infra_per_1m"][u]) + (sc.infra_usd_per_1m - 0.02)
-                chat_tok = 2_000_000.0 * float(behaviors["utilization"][u])
+                seg_u = int(behaviors["segments"][u])
+                if seg_u == 2:
+                    chat_tok = sc.gated_power_chat_tokens_min + float(behaviors["utilization"][u]) * (sc.gated_power_chat_tokens_max - sc.gated_power_chat_tokens_min)
+                else:
+                    chat_tok = sc.gated_chat_tokens_base * float(behaviors["utilization"][u])
                 text_bdt = (chat_tok * (usd_1m / 1e6) * 0.90 + chat_tok * (inf / 1e6)) * fx * (1.0 + tt)
 
                 img_p = float(behaviors["gp_image_usd"][u]) if pack.platform == "gp" else pack.image_usd

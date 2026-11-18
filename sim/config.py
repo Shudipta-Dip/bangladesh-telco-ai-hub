@@ -29,6 +29,11 @@ VIDEO_USD_PER_SEC = 0.10
 GP_VIDEO_CAP_SEC = 30.0
 BL_VIDEO_SEC_PER_CLIP = 5.0
 BL_TOKENS_PER_FILE = 20_000.0
+BL_TOKENS_PER_IMAGE = 1_120.0  # Gemini Imagen 3 multimodal token equivalent (~1K output block)
+GP_TOKENS_PER_IMAGE = 1_120.0  # OpenAI GPT Image / DALL-E multimodal token equivalent (~1K output block)
+GATED_CHAT_TOKENS_BASE = 2_000_000.0  # Baseline chat token volume for gated packs
+GATED_POWER_CHAT_TOKENS_MIN = 5_000_000.0  # Power-segment minimum chat token volume (spec: 5M-15M)
+GATED_POWER_CHAT_TOKENS_MAX = 15_000_000.0  # Power-segment maximum chat token volume (spec: 5M-15M)
 BANK_TT_COMMISSION_PCT = 0.0
 
 IO_RATIOS = (3.0, 5.0, 15.0, 154.0, 275.0, 294.0)
@@ -66,6 +71,11 @@ class ScenarioConfig:
     video_usd_per_sec: float = VIDEO_USD_PER_SEC
     bl_video_sec_per_clip: float = BL_VIDEO_SEC_PER_CLIP
     bl_tokens_per_file: float = BL_TOKENS_PER_FILE
+    bl_tokens_per_image: float = BL_TOKENS_PER_IMAGE
+    gp_tokens_per_image: float = GP_TOKENS_PER_IMAGE
+    gated_chat_tokens_base: float = GATED_CHAT_TOKENS_BASE
+    gated_power_chat_tokens_min: float = GATED_POWER_CHAT_TOKENS_MIN
+    gated_power_chat_tokens_max: float = GATED_POWER_CHAT_TOKENS_MAX
 
     @property
     def image_usd(self) -> float:
@@ -75,6 +85,17 @@ class ScenarioConfig:
 
 
 class Model:
+    """Foundation model pricing and tier classification.
+
+    Note on Claude Haiku 4.5 Tier Duality:
+    Model.tier represents the global foundation lab portfolio tier (e.g. 'economy', 'mid',
+    'flagship' across all models in a provider's portfolio). In Anthropic's overall family,
+    Claude Haiku is their economy/utility tier ($1.00 input, $5.00 output).
+    By contrast, ROBI_BALANCED_TIER represents the operator-relative marketing and risk tier:
+    on Robi's curated 8-model catalog, Haiku is the single most expensive model offered, so
+    Robi classifies it as 'frontier' for commercial mode routing and risk management.
+    """
+
     def __init__(self, model_id, name, miss, output, cache_read=None, cache_write=None, tier=None):
         self.id = model_id
         self.name = name
@@ -212,6 +233,11 @@ ROBI_TEXT_MODELS = [
 
 # Robi 4 Operating Modes
 ROBI_SAVER_MODELS = ["deepseek-v4-flash", "gemini-2.5-flash-lite"]
+
+# ROBI_BALANCED_TIER represents the operator-relative marketing and risk tier:
+# In Anthropic's global lab lineup, Claude Haiku 4.5 is an economy model (Model.tier="economy").
+# However, within Robi's commercial 8-model catalog, Haiku is the priciest model offered
+# ($5.00/1M output), leading Robi to designate it as 'frontier' for balanced/expert mode routing.
 ROBI_BALANCED_TIER = {
     "budget": ["deepseek-v4-flash", "gemini-2.5-flash-lite", "gpt-5-nano", "grok-4.1-fast-nr"],
     "mid": ["gemini-3.5-flash-lite", "kimi-k2.6"],
@@ -258,6 +284,7 @@ class Pack:
         video_usd_per_sec: Optional[float] = None,
         audio_usd: Optional[float] = None,
         video_clips: Optional[float] = None,
+        allowed_modes: Optional[List[str]] = None,
     ):
         self.platform = platform
         self.pack_id = pack_id
@@ -276,6 +303,7 @@ class Pack:
         self.video_usd_per_sec = video_usd_per_sec
         self.audio_usd = audio_usd
         self.video_clips = None if video_clips is None else float(video_clips)
+        self.allowed_modes = list(allowed_modes) if allowed_modes is not None else None
 
     @property
     def key(self) -> str:
@@ -404,11 +432,11 @@ def robi_packs(models: Optional[List[str]] = None) -> List[Pack]:
     monthly_common = dict(platform="robi", models=model_list, kind="token_pool", video_sec=0.0, validity_days=30, category="monthly")
     return [
         # Monthly packs only (Day packs dropped per specification)
-        Pack(pack_id="p99", name="Tk 99", price_bdt=99, tokens=1_000_000, images=0, **monthly_common),
-        Pack(pack_id="p149", name="Tk 149", price_bdt=149, tokens=2_000_000, images=0, **monthly_common),
-        Pack(pack_id="p349", name="Tk 349", price_bdt=349, tokens=5_000_000, images=0, **monthly_common),
-        Pack(pack_id="p599", name="Tk 599", price_bdt=599, tokens=10_000_000, images=0, **monthly_common),
-        Pack(pack_id="p999", name="Tk 999", price_bdt=999, tokens=20_000_000, images=0, **monthly_common),
+        Pack(pack_id="p99", name="Tk 99", price_bdt=99, tokens=1_000_000, images=0, allowed_modes=["saver", "balanced"], **monthly_common),
+        Pack(pack_id="p149", name="Tk 149", price_bdt=149, tokens=2_000_000, images=0, allowed_modes=["saver", "balanced"], **monthly_common),
+        Pack(pack_id="p349", name="Tk 349", price_bdt=349, tokens=5_000_000, images=0, allowed_modes=["saver", "balanced", "expert"], **monthly_common),
+        Pack(pack_id="p599", name="Tk 599", price_bdt=599, tokens=10_000_000, images=0, allowed_modes=["saver", "balanced", "expert", "beast"], **monthly_common),
+        Pack(pack_id="p999", name="Tk 999", price_bdt=999, tokens=20_000_000, images=0, allowed_modes=["saver", "balanced", "expert", "beast"], **monthly_common),
     ]
 
 
@@ -472,26 +500,35 @@ def entry_robi_pack() -> Pack:
     return next(p for p in robi_packs() if p.pack_id == "p99")
 
 
-def tokens_per_image_for_pack(pack: Pack, fx_buy: float = FX_BUY, image_usd: Optional[float] = None) -> float:
-    """Calculate token deduction per image for token pool packs (Robi).
+def tokens_per_image_for_pack(
+    pack: Pack,
+    fx_buy: float = FX_BUY,
+    image_usd: Optional[float] = None,
+    scenario: Optional[ScenarioConfig] = None,
+) -> float:
+    """Calculate token deduction or token equivalent per image.
 
-    Deducts tokens from the pool using the pack's implied retail rate:
+    For Robi prepaid token-pool packs, deducts tokens from the pool using the pack's
+    implied retail rate:
         tokens_per_image = (image_usd * fx_buy) / (price_bdt / tokens)
-    Falls back to the entry token-pool pack (Robi Tk 99) if a gated/free pack lacks a token cap.
+    For gated whitelist subscription packs (Banglalink, Grameenphone) which do not
+    have a prepaid token pool or implied retail rate, returns the operator's standard
+    multimodal frontier image token equivalent without fallback or ValueError:
+        - Banglalink: sc.bl_tokens_per_image (~1,120 tokens, Gemini Imagen 3 standard)
+        - Grameenphone: sc.gp_tokens_per_image (~1,120 tokens, OpenAI GPT Image standard)
     """
-    if image_usd is None:
-        if pack.image_usd is not None:
-            image_usd = pack.image_usd
-        else:
-            image_usd = ROBI_IMAGE_USD if pack.platform == "robi" else DEFAULT_IMAGE_USD
-
-    if pack.price_bdt <= 0 or pack.tokens is None or pack.tokens <= 0:
-        entry = entry_robi_pack()
-        retail_bdt_per_token = entry.price_bdt / entry.tokens
-    else:
+    sc = scenario or ScenarioConfig()
+    if pack.platform == "banglalink":
+        return sc.bl_tokens_per_image
+    elif pack.platform == "gp":
+        return sc.gp_tokens_per_image
+    elif pack.platform == "robi" and pack.tokens is not None and pack.tokens > 0 and pack.price_bdt > 0:
+        if image_usd is None:
+            image_usd = pack.image_usd if pack.image_usd is not None else sc.robi_image_usd
         retail_bdt_per_token = pack.price_bdt / pack.tokens
-
-    return (image_usd * fx_buy) / retail_bdt_per_token
+        return (image_usd * fx_buy) / retail_bdt_per_token
+    else:
+        return sc.bl_tokens_per_image
 
 
 def banglalink_tokens_per_image(pack: Pack, fx_buy: float = FX_BUY, image_usd: float = BANGLALINK_IMAGE_USD) -> float:

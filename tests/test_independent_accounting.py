@@ -109,8 +109,11 @@ class TestIndependentAccountingOracle(unittest.TestCase):
 
     def test_null_token_fallback_guard(self):
         bl_basic = next(p for p in banglalink_packs() if p.pack_id == "basic")
-        expected_basic = (0.003 * 123.30) / (99.0 / 1_000_000.0)
-        self.assertAlmostEqual(tokens_per_image_for_pack(bl_basic), expected_basic, places=6)
+        gp_lite = next(p for p in gp_packs() if p.pack_id == "lite")
+        sc = ScenarioConfig()
+        # Gated packs return operator-specific multimodal frontier image tokens without cross-operator fallback or ValueError
+        self.assertAlmostEqual(tokens_per_image_for_pack(bl_basic, scenario=sc), sc.bl_tokens_per_image, places=6)
+        self.assertAlmostEqual(tokens_per_image_for_pack(gp_lite, scenario=sc), sc.gp_tokens_per_image, places=6)
         expected_robi_default = (ROBI_IMAGE_USD * 123.30) / (99.0 / 1_000_000.0)
         self.assertAlmostEqual(default_tokens_per_image(None), expected_robi_default, places=6)
 

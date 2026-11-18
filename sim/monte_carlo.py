@@ -2,7 +2,7 @@
 
 Simulates 10,000 heterogeneous 100-user cohorts sampled from continuous empirical distributions
 grounded in Bangladesh mobile data (BTRC, 85/15 modified Pareto, prepaid breakage)
-and real-world GenAI token distributions (Lognormal core with Pareto coding-agent tail).
+and real-world GenAI token distributions (Lognormal core with Pareto power-user tail).
 """
 
 from __future__ import annotations
@@ -90,7 +90,7 @@ class CohortSampler:
         # 5. Continuous Input:Output Ratio via Log-Mixture
         # Dormant: mode ~ 4:1 (chat)
         # Core: mode ~ 12:1 (context chat / docs)
-        # Power: mode ~ 180:1 (agentic code loops / SWE-bench)
+        # Power: mode ~ 180:1 (large automated loops / multi-file processing)
         io_ratio = np.zeros(n, dtype=float)
         io_ratio[mask0] = np.exp(self.rng.normal(np.log(4.0), 0.35, size=np.sum(mask0)))
         io_ratio[mask1] = np.exp(self.rng.normal(np.log(12.0), 0.50, size=np.sum(mask1)))
@@ -277,7 +277,7 @@ def evaluate_cohorts(
     if pack.kind == "token_pool":
         unit_img_price_tp = pack.image_usd if pack.image_usd is not None else (sc.robi_image_usd if pack.platform == "robi" else sc.bl_image_usd)
         mean_fx_all = float(np.mean(behaviors["fx_buy"] + (sc.fx_buy - FX_BUY)))
-        tokens_per_img = tokens_per_image_for_pack(pack, fx_buy=mean_fx_all, image_usd=unit_img_price_tp)
+        tokens_per_img = tokens_per_image_for_pack(pack, fx_buy=mean_fx_all, image_usd=unit_img_price_tp, scenario=sc)
 
     c_rev = np.empty(n_cohorts, dtype=float)
     c_cogs_bdt = np.empty(n_cohorts, dtype=float)
@@ -299,7 +299,19 @@ def evaluate_cohorts(
         u_len = u1 - u0
 
         if pack.platform == "robi":
-            user_modes = np.full(u_len, "beast") if pack.category == "day_pack" else behaviors.get("robi_mode", np.full(n_total, "balanced"))[u0:u1]
+            if pack.category == "day_pack":
+                user_modes = np.full(u_len, "beast")
+            else:
+                raw_modes = behaviors.get("robi_mode", np.full(n_total, "balanced"))[u0:u1]
+                allowed = pack.allowed_modes or ["saver", "balanced", "expert", "beast"]
+                if "expert" not in allowed and "beast" not in allowed:
+                    # Commercial restriction: Pack 1 (p99) & Pack 2 (p149) route strictly to Saver & Balanced
+                    user_modes = np.where(np.isin(raw_modes, ["expert", "beast"]), "balanced", raw_modes)
+                elif "beast" not in allowed:
+                    # Commercial restriction: Pack 3 (p349) routes to Saver, Balanced, Expert
+                    user_modes = np.where(raw_modes == "beast", "expert", raw_modes)
+                else:
+                    user_modes = raw_modes
             served_w = np.zeros((u_len, len(pack.models)), dtype=float)
             for mode_name, w_vec in mode_matrix.items():
                 mask = user_modes == mode_name
@@ -375,7 +387,13 @@ def evaluate_cohorts(
             media_usd = images * img_price + video_sec * vid_price + audio_items * aud_price
             media_bdt = media_usd * (1.0 - sc.volume_discount) * fx * (1.0 + tt)
 
-            chat_tokens = 2_000_000.0 * util
+            seg = behaviors["segments"][u0:u1] if "segments" in behaviors else np.ones(u_len, dtype=int)
+            # Power users sample higher monthly text volume (5M to 15M tokens)
+            chat_tokens = np.where(
+                seg == 2,
+                sc.gated_power_chat_tokens_min + util * (sc.gated_power_chat_tokens_max - sc.gated_power_chat_tokens_min),
+                sc.gated_chat_tokens_base * util,
+            )
             api_usd = chat_tokens * usd_per_tok
             infra_usd = chat_tokens * (infra / 1_000_000.0)
             text_bdt = (api_usd * (1.0 - sc.volume_discount) + infra_usd) * fx * (1.0 + tt)
