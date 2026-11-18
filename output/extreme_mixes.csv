@@ -1,0 +1,11 @@
+platform,pack,dearest_mix,dearest_io_ratio,dearest_cache_hit,dearest_usd_per_1m,cheapest_mix,cheapest_io_ratio,cheapest_cache_hit,cheapest_usd_per_1m
+robi,catalog,Claude Haiku 4.5 100%,3.0,0.0,2.0,DeepSeek V4 Flash 100%,294.0,1.0,0.005023728813559322
+banglalink,Basic Tk 100,DeepSeek V4.1 100%,3.0,0.0,0.26249999999999996,DeepSeek V4.1 100%,294.0,1.0,0.005023728813559322
+banglalink,Advanced Tk 300,Grok 4.3 / 4.1 Fast 100%,3.0,0.0,1.5625,DeepSeek V4.1 100%,294.0,1.0,0.005023728813559322
+banglalink,Pro Tk 500,Claude Haiku 5.5 100%,3.0,0.0,2.0,DeepSeek V4.1 100%,294.0,1.0,0.005023728813559322
+banglalink,"Creator Tk 1,000",Perplexity Sonar Pro 100%,3.0,0.0,6.0,DeepSeek V4.1 100%,294.0,1.0,0.005023728813559322
+banglalink,"Legend Tk 1,500",Perplexity Sonar Pro 100%,3.0,0.0,6.0,DeepSeek V4 Pro 100%,294.0,1.0,0.028637288135593218
+gp,Student Tk 71,Gemini 3 Flash 100%,3.0,0.0,1.125,GPT-5 Nano 100%,294.0,1.0,0.0063389830508474585
+gp,Lite Tk 99,Gemini 3 Flash 100%,3.0,0.0,1.125,DeepSeek V4 Flash 100%,294.0,1.0,0.005023728813559322
+gp,Plus Tk 299,GPT-5.4 100%,3.0,0.0,5.625,DeepSeek V4 Flash 100%,294.0,1.0,0.005023728813559322
+gp,Pro Tk 799,Claude Opus 5 100%,3.0,0.0,10.0,DeepSeek V4 Pro 100%,294.0,1.0,0.028637288135593218
